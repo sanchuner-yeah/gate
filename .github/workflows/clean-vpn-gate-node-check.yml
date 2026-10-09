@@ -22,33 +22,22 @@ jobs:
           echo "工作流名称: $WORKFLOW_NAME"
           echo "工作流文件: $WORKFLOW_FILE"
 
-          WORKFLOW_ID=$(gh api \
-            -H "X-GitHub-Api-Version: 2022-11-28" \
-            "/repos/$REPO/actions/workflows" \
-            --arg wfpath "$WORKFLOW_FILE" \
-            --jq '.workflows[] | select(.path == $wfpath) | .id')
+          # 获取全部workflows列表，管道传给jq，使用--arg
+          WORKFLOW_ID=$(gh api "/repos/$REPO/actions/workflows" | jq --arg wfpath "$WORKFLOW_FILE" -r '.workflows[] | select(.path == $wfpath) | .id')
 
           if [ -z "$WORKFLOW_ID" ]; then
             echo "未通过文件路径找到工作流，尝试通过名称查找..."
-            WORKFLOW_ID=$(gh api \
-              -H "X-GitHub-Api-Version: 2022-11-28" \
-              "/repos/$REPO/actions/workflows" \
-              --arg wfname "$WORKFLOW_NAME" \
-              --jq '.workflows[] | select(.name == $wfname) | .id')
+            WORKFLOW_ID=$(gh api "/repos/$REPO/actions/workflows" | jq --arg wfname "$WORKFLOW_NAME" -r '.workflows[] | select(.name == $wfname) | .id')
           fi
 
           if [ -z "$WORKFLOW_ID" ]; then
             echo "::error::找不到工作流，请确认文件名和名称是否正确"
             exit 1
           fi
-
           echo "找到工作流 ID: $WORKFLOW_ID"
 
-          RUN_IDS=$(gh api \
-            -H "X-GitHub-Api-Version: 2022-11-28" \
-            "/repos/$REPO/actions/workflows/$WORKFLOW_ID/runs" \
-            --paginate \
-            --jq '.workflow_runs[] | select(.conclusion != null) | .id')
+          # 获取所有已完成run，排除正在运行
+          RUN_IDS=$(gh api --paginate "/repos/$REPO/actions/workflows/$WORKFLOW_ID/runs" | jq -r '.workflow_runs[] | select(.conclusion != null) | .id')
 
           if [ -z "$RUN_IDS" ]; then
             echo "没有已完成的运行记录，无需清理。"
@@ -64,14 +53,11 @@ jobs:
             exit 0
           fi
 
+          # 从第2条开始删除（下标i=1，保留i=0最新一条）
           for ((i = 1; i < TOTAL; i++)); do
             RUN_ID="${RUN_ARR[$i]}"
             echo "正在删除旧 run id: $RUN_ID"
-            gh api \
-              --method DELETE \
-              -H "X-GitHub-Api-Version: 2022-11-28" \
-              "/repos/$REPO/actions/runs/$RUN_ID" \
-              || true
+            gh api --method DELETE "/repos/$REPO/actions/runs/$RUN_ID" || true
             sleep 0.3
           done
 
