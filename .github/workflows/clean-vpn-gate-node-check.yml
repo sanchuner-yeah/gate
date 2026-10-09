@@ -25,14 +25,16 @@ jobs:
           WORKFLOW_ID=$(gh api \
             -H "X-GitHub-Api-Version: 2022-11-28" \
             "/repos/$REPO/actions/workflows" \
-            --jq '.workflows[] | select(.path == $WORKFLOW_FILE) | .id')
+            --arg wfpath "$WORKFLOW_FILE" \
+            --jq '.workflows[] | select(.path == $wfpath) | .id')
 
           if [ -z "$WORKFLOW_ID" ]; then
             echo "未通过文件路径找到工作流，尝试通过名称查找..."
             WORKFLOW_ID=$(gh api \
               -H "X-GitHub-Api-Version: 2022-11-28" \
               "/repos/$REPO/actions/workflows" \
-              --jq '.workflows[] | select(.name == $WORKFLOW_NAME) | .id')
+              --arg wfname "$WORKFLOW_NAME" \
+              --jq '.workflows[] | select(.name == $wfname) | .id')
           fi
 
           if [ -z "$WORKFLOW_ID" ]; then
