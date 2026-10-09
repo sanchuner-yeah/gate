@@ -10,55 +10,42 @@ jobs:
     env:
       GH_TOKEN: ${{ secrets.PAT_TOKEN }}
       REPO: ${{ github.repository }}
+      WF_ID_VPNCHECK: 377545271
+      WF_ID_SELF: 379230555
     steps:
-      - name: Delete old VPN Gate Node Check runs, keep only 1 latest
+      - name: 清理VPN检测工作流 + 清理本清理工作流历史记录，各保留最新1条
         run: |
           set -e
+          # 两个工作流ID数组
+          WF_LIST=($WF_ID_VPNCHECK $WF_ID_SELF)
 
-          WORKFLOW_FILE=".github/workflows/check.yml"
-          WORKFLOW_NAME="VPN Gate Node Check"
+          for WORKFLOW_ID in "${WF_LIST[@]}"; do
+            echo "==================== 开始处理 Workflow ID: $WORKFLOW_ID ===================="
+            # 获取【已结束】的run，正在运行的任务自动过滤，不会删除本次执行
+            RUN_IDS=$(gh api --paginate "/repos/$REPO/actions/workflows/$WORKFLOW_ID/runs" | jq -r '.workflow_runs[] | select(.conclusion != null) | .id')
 
-          echo "仓库: $REPO"
-          echo "工作流名称: $WORKFLOW_NAME"
-          echo "工作流文件: $WORKFLOW_FILE"
+            if [ -z "$RUN_IDS" ]; then
+              echo ">> 该工作流没有已完成记录，跳过"
+              continue
+            fi
 
-          # 获取全部workflows列表，管道传给jq，使用--arg
-          WORKFLOW_ID=$(gh api "/repos/$REPO/actions/workflows" | jq --arg wfpath "$WORKFLOW_FILE" -r '.workflows[] | select(.path == $wfpath) | .id')
+            RUN_ARR=($RUN_IDS)
+            TOTAL=${#RUN_ARR[@]}
+            echo ">> 一共 $TOTAL 条已完成运行记录"
 
-          if [ -z "$WORKFLOW_ID" ]; then
-            echo "未通过文件路径找到工作流，尝试通过名称查找..."
-            WORKFLOW_ID=$(gh api "/repos/$REPO/actions/workflows" | jq --arg wfname "$WORKFLOW_NAME" -r '.workflows[] | select(.name == $wfname) | .id')
-          fi
+            if [ "$TOTAL" -le 1 ]; then
+              echo ">> 记录数量≤1，无需删除"
+              continue
+            fi
 
-          if [ -z "$WORKFLOW_ID" ]; then
-            echo "::error::找不到工作流，请确认文件名和名称是否正确"
-            exit 1
-          fi
-          echo "找到工作流 ID: $WORKFLOW_ID"
-
-          # 获取所有已完成run，排除正在运行
-          RUN_IDS=$(gh api --paginate "/repos/$REPO/actions/workflows/$WORKFLOW_ID/runs" | jq -r '.workflow_runs[] | select(.conclusion != null) | .id')
-
-          if [ -z "$RUN_IDS" ]; then
-            echo "没有已完成的运行记录，无需清理。"
-            exit 0
-          fi
-
-          RUN_ARR=($RUN_IDS)
-          TOTAL=${#RUN_ARR[@]}
-          echo "共找到 $TOTAL 条已完成记录。"
-
-          if [ "$TOTAL" -le 1 ]; then
-            echo "记录数量已满足要求，无需删除。"
-            exit 0
-          fi
-
-          # 从第2条开始删除（下标i=1，保留i=0最新一条）
-          for ((i = 1; i < TOTAL; i++)); do
-            RUN_ID="${RUN_ARR[$i]}"
-            echo "正在删除旧 run id: $RUN_ID"
-            gh api --method DELETE "/repos/$REPO/actions/runs/$RUN_ID" || true
-            sleep 0.3
+            # 数组下标0=最新记录保留，i从1开始删除所有旧记录
+            for ((i=1; i<TOTAL; i++)); do
+              rid=${RUN_ARR[$i]}
+              echo "删除旧Run ID: $rid"
+              gh api -X DELETE "/repos/$REPO/actions/runs/$rid" || true
+              sleep 0.3
+            done
+            echo ">> 当前Workflow清理完成"
           done
 
-          echo "✅ 清理完成，仅保留最新 1 条记录。"
+          echo "✅ 双工作流清理全部完成"
