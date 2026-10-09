@@ -8,6 +8,7 @@ on:
 jobs:
   clean:
     runs-on: ubuntu-latest
+    # ✅ env放在job层级，全局给到这个job下所有步骤
     env:
       GH_TOKEN: ${{ secrets.PAT_TOKEN }}
       REPO: ${{ github.repository }}
@@ -16,7 +17,6 @@ jobs:
       - name: Delete old VPN Gate Node Check runs, keep only 1 latest
         run: |
           set -e
-
           echo "正在获取已完成的运行记录..."
           RUN_IDS=$(gh api -H "X-GitHub-Api-Version:2022-11-28" \
             "/repos/$REPO/actions/workflows/$WORKFLOW_NAME/runs" \
@@ -37,7 +37,7 @@ jobs:
             exit 0
           fi
 
-          # 跳过第0个（最新一条），删除其余所有旧记录
+          # 保留最新第0条，删除剩下全部
           for ((i = 1; i < TOTAL; i++)); do
             RUN_ID=${RUN_ARR[$i]}
             echo "正在删除旧 run id: $RUN_ID"
@@ -45,5 +45,4 @@ jobs:
               "/repos/$REPO/actions/runs/$RUN_ID" || true
             sleep 0.3
           done
-
           echo "清理完成，仅保留最新 1 条记录。"
