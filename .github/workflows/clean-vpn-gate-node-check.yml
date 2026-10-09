@@ -1,14 +1,13 @@
 name: Clean VPN Gate Node Check Runs
 on:
   schedule:
-    # 北京时间 06:00 = UTC 22:00
+    # 北京时间 06:00 = UTC 22点
     - cron: "0 22 * * *"
   workflow_dispatch:
 
 jobs:
   clean:
     runs-on: ubuntu-latest
-    # ✅ env放在job层级，全局给到这个job下所有步骤
     env:
       GH_TOKEN: ${{ secrets.PAT_TOKEN }}
       REPO: ${{ github.repository }}
@@ -17,32 +16,37 @@ jobs:
       - name: Delete old VPN Gate Node Check runs, keep only 1 latest
         run: |
           set -e
-          echo "正在获取已完成的运行记录..."
+          echo "仓库: $REPO"
+          echo "工作流名称: $WORKFLOW_NAME"
+          # 先获取 workflow_id，用名称查找，规避名称匹配404问题
+          WORKFLOW_ID=$(gh api -H "X-GitHub-Api-Version:2022-11-28" \
+            "/repos/$REPO/actions/workflows" \
+            --jq '.workflows[] | select(.name == "$WORKFLOW_NAME") | .id')
+          echo "WORKFLOW_ID=$WORKFLOW_ID"
+          if [ -z "$WORKFLOW_ID" ];then
+            echo "❌ 找不到该工作流，请核对名称"
+            exit 1
+          fi
           RUN_IDS=$(gh api -H "X-GitHub-Api-Version:2022-11-28" \
-            "/repos/$REPO/actions/workflows/$WORKFLOW_NAME/runs" \
+            "/repos/$REPO/actions/workflows/$WORKFLOW_ID/runs" \
             --paginate \
             --jq '.workflow_runs[] | select(.conclusion != null) | .id')
-
           if [ -z "$RUN_IDS" ]; then
-            echo "没有找到可删除的历史记录。"
+            echo "没有可清理的已完成run记录"
             exit 0
           fi
-
           RUN_ARR=($RUN_IDS)
           TOTAL=${#RUN_ARR[@]}
-          echo "共找到 $TOTAL 条已完成记录。"
-
-          if [ "$TOTAL" -le 1 ]; then
-            echo "记录数量已满足要求，无需删除。"
+          echo "一共找到 $TOTAL 条已完成记录"
+          if [ "$TOTAL" -le 1 ];then
+            echo "记录数≤1，无需删除"
             exit 0
           fi
-
-          # 保留最新第0条，删除剩下全部
-          for ((i = 1; i < TOTAL; i++)); do
-            RUN_ID=${RUN_ARR[$i]}
-            echo "正在删除旧 run id: $RUN_ID"
-            gh api --method DELETE -H "X-GitHub-Api-Version:2022-11-28" \
-              "/repos/$REPO/actions/runs/$RUN_ID" || true
+          # 跳过第0条最新的，删除其余所有旧记录
+          for ((i=1;i<TOTAL;i++)); do
+            RID=${RUN_ARR[$i]}
+            echo "删除 run $RID"
+            gh api --method DELETE -H "X-GitHub-Api-Version:2022-11-28" "/repos/$REPO/actions/runs/$RID" || true
             sleep 0.3
           done
-          echo "清理完成，仅保留最新 1 条记录。"
+          echo "✅ 清理完成，仅保留最新1条"
