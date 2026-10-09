@@ -297,13 +297,14 @@ EDGE_HOSTS = [
     h.strip()
     for h in os.environ.get(
         "EDGE_HOSTS",
-        "saas.sin.fan:443,cdn.204910.best:443,www.mfyx.cn:443,bbs.alipansou.com:443,cdn.ctn32.us.kg:443,shop.glico.com:443,www.dg22.top,"
+         "saas.sin.fan:443,cdn.204910.best:443,www.mfyx.cn:443,bbs.alipansou.com:443,cdn.ctn32.us.kg:443,shop.glico.com:443,www.dg22.top,"
          "dongbanghong.com:443,ex.warspite.dpdns.org:443,hardware.shopify.com:443,mvnrepository.com:443,prompt.gzcrtw.com:443,"
-         "registry.yarnpkg.com:443,registry.npmjs.org:443,shop.glico.com:443,store.sony.com.sg:443,www.akasantech.com:443,www.ox.ac.uk:443",
+        "registry.yarnpkg.com:443,registry.npmjs.org:443,shop.glico.com:443,store.sony.com.sg:443,www.akasantech.com:443,www.ox.ac.uk:443",
+    ).split(",")
     if h.strip()
 ]
 
-NODES_URL = os.environ.get("NODES_URL", "https://sanchuner-yeah.github.io/gate/nodes.txt")
+NODES_URL = os.environ.get("NODES_URL", "https://yxrs2529495693.github.io/gate/nodes.txt")
 
 def build_nodes_text(data):
     """生成纯节点行版本 (无注释): 每行 = 入口地址#名字$sstp://..."""
